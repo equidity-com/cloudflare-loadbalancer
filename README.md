@@ -125,4 +125,4 @@ Traffic → 70% Primary Server
 
 ## Support
 
-Contact: support@equidity.app
+Contact: support@equidity.com
