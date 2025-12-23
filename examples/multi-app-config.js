@@ -40,7 +40,7 @@ const WHITE_LABEL_CONFIG = {
   backup: 'eqcore-client.failover.equidity.app'
 };
 
-const TIMEOUT = 5000;
+const TIMEOUT = 30000; // 30 seconds for API calls
 const RETRIES = 1;
 
 // ============================================
