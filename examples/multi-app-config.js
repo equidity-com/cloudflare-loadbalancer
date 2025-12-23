@@ -68,9 +68,10 @@ async function tryServer(server, request, originalHost) {
   const url = new URL(request.url);
   const targetUrl = `https://${server}${url.pathname}${url.search}`;
 
-  // Clone headers and add X-Forwarded-Host for tenant detection
+  // Clone headers and add X-Original-Host for tenant detection
+  // Note: Using X-Original-Host instead of X-Forwarded-Host to avoid Traefik interference
   const headers = new Headers(request.headers);
-  headers.set('X-Forwarded-Host', originalHost);
+  headers.set('X-Original-Host', originalHost);
   headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '');
 
   for (let i = 0; i <= RETRIES; i++) {
@@ -100,9 +101,10 @@ async function tryServer(server, request, originalHost) {
 async function handleWebSocket(request, config, originalHost) {
   const url = new URL(request.url);
 
-  // Clone headers and add X-Forwarded-Host for tenant detection
+  // Clone headers and add X-Original-Host for tenant detection
+  // Note: Using X-Original-Host instead of X-Forwarded-Host to avoid Traefik interference
   const headers = new Headers(request.headers);
-  headers.set('X-Forwarded-Host', originalHost);
+  headers.set('X-Original-Host', originalHost);
   headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '');
 
   // Try primary WebSocket server
