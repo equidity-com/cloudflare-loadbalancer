@@ -23,8 +23,8 @@ const APPS = {
     backup: 'api-failover.equidity.app'
   },
   'socket.eqcore.app': {
-    primary: 'eqcore-socket-primary.equidity.app',
-    backup: 'eqcore-socket-failover.equidity.app'
+    primary: 'eqcore-socket.primary.equidity.app',
+    backup: 'eqcore-socket.failover.equidity.app'
   }
   // Add more apps as needed
 };
