@@ -64,7 +64,7 @@ async function fetchWithTimeout(url, options, timeout) {
   }
 }
 
-async function tryServer(server, request, originalHost) {
+async function tryServer(server, request, originalHost, bodyContent = null) {
   const url = new URL(request.url);
   const targetUrl = `https://${server}${url.pathname}${url.search}`;
 
@@ -81,7 +81,7 @@ async function tryServer(server, request, originalHost) {
         {
           method: request.method,
           headers: headers,
-          body: request.body,
+          body: bodyContent,
           redirect: 'manual'
         },
         TIMEOUT
@@ -170,12 +170,15 @@ export default {
       return handleWebSocket(request, config, host);
     }
 
+    // Clone request body for potential retry (body stream can only be read once)
+    const bodyContent = request.body ? await request.arrayBuffer() : null;
+
     // HTTP: Try primary server (pass original host for tenant detection)
-    let response = await tryServer(config.primary, request, host);
+    let response = await tryServer(config.primary, request, host, bodyContent);
     if (response) return response;
 
     // HTTP: Try backup server
-    response = await tryServer(config.backup, request, host);
+    response = await tryServer(config.backup, request, host, bodyContent);
     if (response) return response;
 
     // Both servers failed
