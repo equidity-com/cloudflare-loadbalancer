@@ -1,5 +1,5 @@
 /**
- * Multi-App Load Balancer
+ * Multi-App Load Balancer with WebSocket Support
  *
  * Use this if you have multiple apps on different domains
  * managed by a single worker.
@@ -21,6 +21,10 @@ const APPS = {
   'api.eqtrader.app': {
     primary: 'api-primary.equidity.app',
     backup: 'api-failover.equidity.app'
+  },
+  'socket.eqcore.app': {
+    primary: 'eqcore-socket-primary.equidity.app',
+    backup: 'eqcore-socket-failover.equidity.app'
   }
   // Add more apps as needed
 };
@@ -77,6 +81,25 @@ async function tryServer(server, request) {
   return null;
 }
 
+async function handleWebSocket(request, config) {
+  const url = new URL(request.url);
+
+  // Try primary WebSocket server
+  const primaryUrl = `https://${config.primary}${url.pathname}${url.search}`;
+  try {
+    const response = await fetch(primaryUrl, request);
+    if (response.status === 101) {
+      return response;
+    }
+  } catch (e) {
+    // Primary failed, try backup
+  }
+
+  // Try backup WebSocket server
+  const backupUrl = `https://${config.backup}${url.pathname}${url.search}`;
+  return fetch(backupUrl, request);
+}
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -95,11 +118,17 @@ export default {
       );
     }
 
-    // Try primary server
+    // Check for WebSocket upgrade
+    const upgradeHeader = request.headers.get('Upgrade');
+    if (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket') {
+      return handleWebSocket(request, config);
+    }
+
+    // HTTP: Try primary server
     let response = await tryServer(config.primary, request);
     if (response) return response;
 
-    // Try backup server
+    // HTTP: Try backup server
     response = await tryServer(config.backup, request);
     if (response) return response;
 
