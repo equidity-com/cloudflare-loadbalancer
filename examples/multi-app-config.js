@@ -33,6 +33,13 @@ const APPS = {
   // Add more apps as needed
 };
 
+// White-label client config (*.equidity.cloud and custom domains via SaaS)
+const WHITE_LABEL_CONFIG = {
+  domain: 'equidity.cloud',
+  primary: 'eqcore-client.primary.equidity.app',
+  backup: 'eqcore-client.failover.equidity.app'
+};
+
 const TIMEOUT = 5000;
 const RETRIES = 1;
 
@@ -104,13 +111,30 @@ async function handleWebSocket(request, config) {
   return fetch(backupUrl, request);
 }
 
+// Get config for hostname (supports exact match and wildcard)
+function getConfig(host) {
+  // Check exact match first
+  if (APPS[host]) {
+    return APPS[host];
+  }
+
+  // Check if it's a white-label domain (*.equidity.cloud or custom domain via SaaS)
+  if (host.endsWith('.' + WHITE_LABEL_CONFIG.domain) || host === WHITE_LABEL_CONFIG.domain) {
+    return WHITE_LABEL_CONFIG;
+  }
+
+  // For Cloudflare SaaS custom hostnames, route to white-label client
+  // Custom domains will be handled here (they won't match APPS)
+  return WHITE_LABEL_CONFIG;
+}
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
     const host = url.hostname;
 
-    // Get config for this app
-    const config = APPS[host];
+    // Get config for this app (exact match or wildcard)
+    const config = getConfig(host);
 
     if (!config) {
       return new Response(
