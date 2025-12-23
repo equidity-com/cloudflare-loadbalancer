@@ -64,9 +64,14 @@ async function fetchWithTimeout(url, options, timeout) {
   }
 }
 
-async function tryServer(server, request) {
+async function tryServer(server, request, originalHost) {
   const url = new URL(request.url);
   const targetUrl = `https://${server}${url.pathname}${url.search}`;
+
+  // Clone headers and add X-Forwarded-Host for tenant detection
+  const headers = new Headers(request.headers);
+  headers.set('X-Forwarded-Host', originalHost);
+  headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '');
 
   for (let i = 0; i <= RETRIES; i++) {
     try {
@@ -74,7 +79,7 @@ async function tryServer(server, request) {
         targetUrl,
         {
           method: request.method,
-          headers: request.headers,
+          headers: headers,
           body: request.body,
           redirect: 'manual'
         },
@@ -92,13 +97,21 @@ async function tryServer(server, request) {
   return null;
 }
 
-async function handleWebSocket(request, config) {
+async function handleWebSocket(request, config, originalHost) {
   const url = new URL(request.url);
+
+  // Clone headers and add X-Forwarded-Host for tenant detection
+  const headers = new Headers(request.headers);
+  headers.set('X-Forwarded-Host', originalHost);
+  headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '');
 
   // Try primary WebSocket server
   const primaryUrl = `https://${config.primary}${url.pathname}${url.search}`;
   try {
-    const response = await fetch(primaryUrl, request);
+    const response = await fetch(primaryUrl, {
+      headers: headers,
+      body: request.body
+    });
     if (response.status === 101) {
       return response;
     }
@@ -108,7 +121,10 @@ async function handleWebSocket(request, config) {
 
   // Try backup WebSocket server
   const backupUrl = `https://${config.backup}${url.pathname}${url.search}`;
-  return fetch(backupUrl, request);
+  return fetch(backupUrl, {
+    headers: headers,
+    body: request.body
+  });
 }
 
 // Get config for hostname (supports exact match and wildcard)
@@ -149,15 +165,15 @@ export default {
     // Check for WebSocket upgrade
     const upgradeHeader = request.headers.get('Upgrade');
     if (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket') {
-      return handleWebSocket(request, config);
+      return handleWebSocket(request, config, host);
     }
 
-    // HTTP: Try primary server
-    let response = await tryServer(config.primary, request);
+    // HTTP: Try primary server (pass original host for tenant detection)
+    let response = await tryServer(config.primary, request, host);
     if (response) return response;
 
     // HTTP: Try backup server
-    response = await tryServer(config.backup, request);
+    response = await tryServer(config.backup, request, host);
     if (response) return response;
 
     // Both servers failed
