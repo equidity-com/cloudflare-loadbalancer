@@ -3,6 +3,11 @@
  *
  * Use this if you have multiple apps on different domains
  * managed by a single worker.
+ *
+ * Features:
+ * - Fast failover with health caching (instant failover after first timeout)
+ * - WebSocket support with failover
+ * - Multi-tenant support via X-Original-Host header
  */
 
 // ============================================
@@ -40,31 +45,70 @@ const WHITE_LABEL_CONFIG = {
   backup: 'eqcore-client.failover.equidity.app'
 };
 
-const TIMEOUT = 5000; // 5 seconds - fast failover (API calls go direct, not through Worker)
-const RETRIES = 1;
+const TIMEOUT = 3000; // 3 seconds - fast failover
+const HEALTH_CACHE_TTL = 30; // Remember server down status for 30 seconds
 
 // ============================================
 // DO NOT MODIFY BELOW THIS LINE
 // ============================================
 
-async function fetchWithTimeout(url, options, timeout) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
+// In-memory health cache (resets on worker cold start)
+const healthCache = new Map();
 
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    return response;
-  } catch (e) {
-    clearTimeout(timeoutId);
-    throw e;
+function isServerMarkedDown(server) {
+  const cached = healthCache.get(server);
+  if (!cached) return false;
+
+  // Check if cache expired
+  if (Date.now() > cached.expiry) {
+    healthCache.delete(server);
+    return false;
   }
+
+  return cached.isDown;
 }
 
-async function tryServer(server, request, originalHost, bodyContent = null) {
+function markServerDown(server) {
+  healthCache.set(server, {
+    isDown: true,
+    expiry: Date.now() + (HEALTH_CACHE_TTL * 1000)
+  });
+}
+
+function markServerUp(server) {
+  healthCache.delete(server);
+}
+
+async function fetchWithTimeout(url, options, timeout) {
+  const controller = new AbortController();
+
+  // Use Promise.race for more reliable timeout
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      controller.abort();
+      reject(new Error('Request timeout'));
+    }, timeout);
+  });
+
+  const fetchPromise = fetch(url, {
+    ...options,
+    signal: controller.signal,
+    cf: {
+      // Cloudflare-specific options for faster connection
+      cacheTtl: 0,
+      cacheEverything: false
+    }
+  });
+
+  return Promise.race([fetchPromise, timeoutPromise]);
+}
+
+async function tryServer(server, request, originalHost, bodyContent = null, skipHealthCheck = false) {
+  // Skip if server is marked down (instant failover)
+  if (!skipHealthCheck && isServerMarkedDown(server)) {
+    return null;
+  }
+
   const url = new URL(request.url);
   const targetUrl = `https://${server}${url.pathname}${url.search}`;
 
@@ -74,59 +118,75 @@ async function tryServer(server, request, originalHost, bodyContent = null) {
   headers.set('X-Original-Host', originalHost);
   headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '');
 
-  for (let i = 0; i <= RETRIES; i++) {
-    try {
-      const response = await fetchWithTimeout(
-        targetUrl,
-        {
-          method: request.method,
-          headers: headers,
-          body: bodyContent,
-          redirect: 'manual'
-        },
-        TIMEOUT
-      );
+  try {
+    const response = await fetchWithTimeout(
+      targetUrl,
+      {
+        method: request.method,
+        headers: headers,
+        body: bodyContent,
+        redirect: 'manual'
+      },
+      TIMEOUT
+    );
 
-      if (response.status < 500) {
-        return response;
-      }
-    } catch (e) {
-      // Continue to retry or next server
+    // Server responded - mark as up
+    markServerUp(server);
+
+    if (response.status < 500) {
+      return response;
     }
-  }
 
-  return null;
+    // 5xx error - mark as down
+    markServerDown(server);
+    return null;
+
+  } catch (e) {
+    // Connection failed or timeout - mark as down
+    markServerDown(server);
+    return null;
+  }
 }
 
 async function handleWebSocket(request, config, originalHost) {
   const url = new URL(request.url);
 
   // Clone headers and add X-Original-Host for tenant detection
-  // Note: Using X-Original-Host instead of X-Forwarded-Host to avoid Traefik interference
   const headers = new Headers(request.headers);
   headers.set('X-Original-Host', originalHost);
   headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '');
 
-  // Try primary WebSocket server
-  const primaryUrl = `https://${config.primary}${url.pathname}${url.search}`;
-  try {
-    const response = await fetch(primaryUrl, {
-      headers: headers,
-      body: request.body
-    });
-    if (response.status === 101) {
-      return response;
+  // Try primary WebSocket server (skip if marked down)
+  if (!isServerMarkedDown(config.primary)) {
+    const primaryUrl = `https://${config.primary}${url.pathname}${url.search}`;
+    try {
+      const response = await fetchWithTimeout(primaryUrl, {
+        headers: headers,
+        body: request.body
+      }, TIMEOUT);
+
+      if (response.status === 101) {
+        markServerUp(config.primary);
+        return response;
+      }
+    } catch (e) {
+      markServerDown(config.primary);
     }
-  } catch (e) {
-    // Primary failed, try backup
   }
 
   // Try backup WebSocket server
   const backupUrl = `https://${config.backup}${url.pathname}${url.search}`;
-  return fetch(backupUrl, {
-    headers: headers,
-    body: request.body
-  });
+  try {
+    const response = await fetch(backupUrl, {
+      headers: headers,
+      body: request.body
+    });
+    markServerUp(config.backup);
+    return response;
+  } catch (e) {
+    markServerDown(config.backup);
+    throw e;
+  }
 }
 
 // Get config for hostname (supports exact match and wildcard)
@@ -181,9 +241,13 @@ export default {
     response = await tryServer(config.backup, request, host, bodyContent);
     if (response) return response;
 
+    // Both servers down - try primary again (in case it just came back)
+    response = await tryServer(config.primary, request, host, bodyContent, true);
+    if (response) return response;
+
     // Both servers failed
     return new Response(
-      '<!DOCTYPE html><html><head><title>Service Unavailable</title></head><body><h1>Service Temporarily Unavailable</h1><p>Please try again later.</p></body></html>',
+      '<!DOCTYPE html><html><head><title>Service Unavailable</title></head><body style="font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;"><div style="text-align: center;"><h1>Service Temporarily Unavailable</h1><p>We are experiencing technical difficulties. Please try again in a moment.</p></div></body></html>',
       {
         status: 503,
         headers: { 'Content-Type': 'text/html' }
