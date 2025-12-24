@@ -116,7 +116,16 @@ async function tryServer(server, request, originalHost, bodyContent = null, skip
   // Note: Using X-Original-Host instead of X-Forwarded-Host to avoid Traefik interference
   const headers = new Headers(request.headers);
   headers.set('X-Original-Host', originalHost);
-  headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '');
+
+  // Forward client IP in all common headers for proxy compatibility
+  // X-Client-Real-IP is a custom header that won't be overwritten by Traefik
+  const clientIp = request.headers.get('CF-Connecting-IP') || '';
+  if (clientIp) {
+    headers.set('X-Client-Real-IP', clientIp);
+    headers.set('X-Real-IP', clientIp);
+    headers.set('X-Forwarded-For', clientIp);
+    headers.set('CF-Connecting-IP', clientIp);
+  }
 
   try {
     const response = await fetchWithTimeout(
@@ -154,7 +163,16 @@ async function handleWebSocket(request, config, originalHost) {
   // Clone headers and add X-Original-Host for tenant detection
   const headers = new Headers(request.headers);
   headers.set('X-Original-Host', originalHost);
-  headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '');
+
+  // Forward client IP in all common headers for proxy compatibility
+  // X-Client-Real-IP is a custom header that won't be overwritten by Traefik
+  const clientIp = request.headers.get('CF-Connecting-IP') || '';
+  if (clientIp) {
+    headers.set('X-Client-Real-IP', clientIp);
+    headers.set('X-Real-IP', clientIp);
+    headers.set('X-Forwarded-For', clientIp);
+    headers.set('CF-Connecting-IP', clientIp);
+  }
 
   // Try primary WebSocket server (skip if marked down)
   if (!isServerMarkedDown(config.primary)) {
