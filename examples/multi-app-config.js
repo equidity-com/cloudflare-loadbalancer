@@ -16,8 +16,8 @@
 
 const APPS = {
   'terminal.eqtrader.app': {
-    primary: 'terminal-primary.equidity.app',
-    backup: 'terminal-failover.equidity.app'
+    primary: 'eqtrader-terminal.primary.equidity.app',
+    backup: 'eqtrader-terminal.failover.equidity.app'
   },
   'admin.eqtrader.app': {
     primary: 'admin-primary.equidity.app',
@@ -40,6 +40,13 @@ const APPS = {
     backup: 'eqcore-admin.failover.equidity.app'
   }
   // Add more apps as needed
+};
+
+// Terminal config (*.eqtrader.app broker subdomains like acme.eqtrader.app)
+const TERMINAL_CONFIG = {
+  domain: 'eqtrader.app',
+  primary: 'eqtrader-terminal.primary.equidity.app',
+  backup: 'eqtrader-terminal.failover.equidity.app'
 };
 
 // White-label client config (*.equidity.cloud and custom domains via SaaS)
@@ -218,7 +225,12 @@ function getConfig(host) {
     return APPS[host];
   }
 
-  // Check if it's a white-label domain (*.equidity.cloud or custom domain via SaaS)
+  // Check if it's a terminal broker subdomain (*.eqtrader.app like acme.eqtrader.app)
+  if (host.endsWith('.' + TERMINAL_CONFIG.domain)) {
+    return TERMINAL_CONFIG;
+  }
+
+  // Check if it's a white-label client domain (*.equidity.cloud)
   if (host.endsWith('.' + WHITE_LABEL_CONFIG.domain) || host === WHITE_LABEL_CONFIG.domain) {
     return WHITE_LABEL_CONFIG;
   }
