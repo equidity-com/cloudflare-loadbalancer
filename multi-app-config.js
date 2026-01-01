@@ -23,10 +23,6 @@ const APPS = {
     primary: 'chart-storage.primary.equidity.app',
     backup: 'chart-storage.failover.equidity.app'
   },
-  'api.eqtrader.app': {
-    primary: 'api-primary.equidity.app',
-    backup: 'api-failover.equidity.app'
-  },
   'socket.eqcore.app': {
     primary: 'eqcore-socket.primary.equidity.app',
     backup: 'eqcore-socket.failover.equidity.app'
