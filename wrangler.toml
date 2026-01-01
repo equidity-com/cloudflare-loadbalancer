@@ -1,0 +1,7 @@
+name = "failover-cloud"
+main = "multi-app-config.js"
+compatibility_date = "2024-01-01"
+
+kv_namespaces = [
+  { binding = "DOMAIN_MAPPINGS", id = "33250ed19b6d48de83bea161eadccf52" }
+]

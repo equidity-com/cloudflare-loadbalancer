@@ -49,9 +49,9 @@ const TERMINAL_CONFIG = {
   backup: 'eqtrader-terminal.failover.equidity.app'
 };
 
-// White-label client config (*.equidity.cloud and custom domains via SaaS)
+// White-label client config (*.eqcore.app and custom domains via SaaS)
 const WHITE_LABEL_CONFIG = {
-  domain: 'equidity.cloud',
+  domain: 'eqcore.app',
   primary: 'eqcore-client.primary.equidity.app',
   backup: 'eqcore-client.failover.equidity.app'
 };
@@ -218,8 +218,8 @@ async function handleWebSocket(request, config, originalHost) {
   }
 }
 
-// Get config for hostname (supports exact match and wildcard)
-function getConfig(host) {
+// Get config for hostname (supports exact match, wildcard, and KV lookup)
+async function getConfig(host, env) {
   // Check exact match first
   if (APPS[host]) {
     return APPS[host];
@@ -230,23 +230,44 @@ function getConfig(host) {
     return TERMINAL_CONFIG;
   }
 
-  // Check if it's a white-label client domain (*.equidity.cloud)
+  // Check if it's a white-label client domain (*.eqcore.app)
   if (host.endsWith('.' + WHITE_LABEL_CONFIG.domain) || host === WHITE_LABEL_CONFIG.domain) {
     return WHITE_LABEL_CONFIG;
   }
 
-  // For Cloudflare SaaS custom hostnames, route to white-label client
-  // Custom domains will be handled here (they won't match APPS)
+  // Check KV for custom domain mappings (for broker custom domains)
+  if (env?.DOMAIN_MAPPINGS) {
+    const appType = await env.DOMAIN_MAPPINGS.get(host);
+    if (appType === 'terminal') {
+      return TERMINAL_CONFIG;
+    }
+    if (appType === 'client') {
+      return WHITE_LABEL_CONFIG;
+    }
+  }
+
+  // Default: route to white-label client for custom domains
   return WHITE_LABEL_CONFIG;
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     const host = url.hostname;
 
-    // Get config for this app (exact match or wildcard)
-    const config = getConfig(host);
+    // Debug endpoint - visit /__debug to see request.cf properties
+    if (url.pathname === '/__debug') {
+      return new Response(JSON.stringify({
+        host: host,
+        cf: request.cf,
+        headers: Object.fromEntries(request.headers)
+      }, null, 2), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Get config for this app (exact match, wildcard, or KV lookup)
+    const config = await getConfig(host, env);
 
     if (!config) {
       return new Response(
