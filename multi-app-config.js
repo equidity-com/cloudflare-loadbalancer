@@ -52,7 +52,7 @@ const WHITE_LABEL_CONFIG = {
   backup: 'eqcore-client.failover.equidity.app'
 };
 
-const TIMEOUT = 3000; // 3 seconds - fast failover
+const TIMEOUT = 30000; // 30 seconds - allows slow API endpoints (MetaTrader calls)
 const HEALTH_CACHE_TTL = 30; // Remember server down status for 30 seconds
 
 // ============================================
@@ -61,6 +61,10 @@ const HEALTH_CACHE_TTL = 30; // Remember server down status for 30 seconds
 
 // In-memory health cache (resets on worker cold start)
 const healthCache = new Map();
+
+// In-memory domain mapping cache to reduce KV reads
+const domainCache = new Map();
+const DOMAIN_CACHE_TTL = 300; // Cache domain mappings for 5 minutes
 
 function isServerMarkedDown(server) {
   const cached = healthCache.get(server);
@@ -84,6 +88,21 @@ function markServerDown(server) {
 
 function markServerUp(server) {
   healthCache.delete(server);
+}
+
+// Get cached domain mapping to reduce KV reads
+async function getCachedDomainMapping(host, env) {
+  const cached = domainCache.get(host);
+  if (cached && Date.now() < cached.expiry) {
+    return cached.value;
+  }
+
+  const value = await env.DOMAIN_MAPPINGS.get(host);
+  domainCache.set(host, {
+    value: value,
+    expiry: Date.now() + (DOMAIN_CACHE_TTL * 1000)
+  });
+  return value;
 }
 
 async function fetchWithTimeout(url, options, timeout) {
@@ -232,8 +251,9 @@ async function getConfig(host, env) {
   }
 
   // Check KV for custom domain mappings (for broker custom domains)
+  // Uses in-memory cache to reduce KV reads (caches for 5 minutes)
   if (env?.DOMAIN_MAPPINGS) {
-    const appType = await env.DOMAIN_MAPPINGS.get(host);
+    const appType = await getCachedDomainMapping(host, env);
     if (appType === 'terminal') {
       return TERMINAL_CONFIG;
     }
