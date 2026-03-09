@@ -15,11 +15,11 @@
 // ============================================
 
 const APPS = {
-  'terminal.eqtrader.app': {
-    primary: 'eqtrader-terminal.primary.equidity.app',
-    backup: 'eqtrader-terminal.failover.equidity.app'
+  'terminal.tradyn.com': {
+    primary: 'tradyn.primary.equidity.app',
+    backup: 'tradyn.failover.equidity.app'
   },
-  'chart-storage.eqtrader.app': {
+  'chart-storage.tradyn.com': {
     primary: 'chart-storage.primary.equidity.app',
     backup: 'chart-storage.failover.equidity.app'
   },
@@ -34,15 +34,27 @@ const APPS = {
   'admin.eqcore.app': {
     primary: 'eqcore-admin.primary.equidity.app',
     backup: 'eqcore-admin.failover.equidity.app'
+  },
+  'socket.brokervu.com': {
+    primary: 'brokervu-socket.primary.equidity.app',
+    backup: 'brokervu-socket.failover.equidity.app'
+  },
+  'api.brokervu.com': {
+    primary: 'brokervu-api.primary.equidity.app',
+    backup: 'brokervu-api.failover.equidity.app'
+  },
+  'admin.brokervu.com': {
+    primary: 'brokervu-admin.primary.equidity.app',
+    backup: 'brokervu-admin.failover.equidity.app'
   }
   // Add more apps as needed
 };
 
-// Terminal config (*.eqtrader.app broker subdomains like acme.eqtrader.app)
+// Terminal config (*.tradyn.com broker subdomains like acme.tradyn.com)
 const TERMINAL_CONFIG = {
-  domain: 'eqtrader.app',
-  primary: 'eqtrader-terminal.primary.equidity.app',
-  backup: 'eqtrader-terminal.failover.equidity.app'
+  domain: 'tradyn.com',
+  primary: 'tradyn.primary.equidity.app',
+  backup: 'tradyn.failover.equidity.app'
 };
 
 // White-label client config (*.eqcore.app and custom domains via SaaS)
@@ -51,6 +63,22 @@ const WHITE_LABEL_CONFIG = {
   primary: 'eqcore-client.primary.equidity.app',
   backup: 'eqcore-client.failover.equidity.app'
 };
+
+// White-label client config for BrokerVu (*.brokervu.com and custom domains via SaaS)
+const BROKERVU_CONFIG = {
+  domain: 'brokervu.com',
+  primary: 'brokervu-client.primary.equidity.app',
+  backup: 'brokervu-client.failover.equidity.app'
+};
+
+// Domains that should pass through to their origin (not handled by this worker)
+// These are root domains with their own websites
+const PASSTHROUGH_DOMAINS = [
+  'tradyn.com',
+  'www.tradyn.com',
+  'brokervu.com',
+  'www.brokervu.com'
+];
 
 const TIMEOUT = 30000; // 30 seconds - allows slow API endpoints (MetaTrader calls)
 const HEALTH_CACHE_TTL = 30; // Remember server down status for 30 seconds
@@ -240,7 +268,8 @@ async function getConfig(host, env) {
     return APPS[host];
   }
 
-  // Check if it's a terminal broker subdomain (*.eqtrader.app like acme.eqtrader.app)
+  // Check if it's a terminal broker subdomain (*.tradyn.com like acme.tradyn.com)
+  // Note: tradyn.com root domain is a separate website, not handled by this worker
   if (host.endsWith('.' + TERMINAL_CONFIG.domain)) {
     return TERMINAL_CONFIG;
   }
@@ -250,15 +279,23 @@ async function getConfig(host, env) {
     return WHITE_LABEL_CONFIG;
   }
 
+  // Check if it's a BrokerVu client domain (*.brokervu.com)
+  if (host.endsWith('.' + BROKERVU_CONFIG.domain)) {
+    return BROKERVU_CONFIG;
+  }
+
   // Check KV for custom domain mappings (for broker custom domains)
   // Uses in-memory cache to reduce KV reads (caches for 5 minutes)
   if (env?.DOMAIN_MAPPINGS) {
     const appType = await getCachedDomainMapping(host, env);
-    if (appType === 'terminal') {
+    if (appType === 'tradyn') {
       return TERMINAL_CONFIG;
     }
     if (appType === 'client') {
       return WHITE_LABEL_CONFIG;
+    }
+    if (appType === 'brokervu') {
+      return BROKERVU_CONFIG;
     }
   }
 
@@ -280,6 +317,11 @@ export default {
       }, null, 2), {
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    // Pass through domains that have their own websites (not handled by this worker)
+    if (PASSTHROUGH_DOMAINS.includes(host)) {
+      return fetch(request);
     }
 
     // Get config for this app (exact match, wildcard, or KV lookup)
