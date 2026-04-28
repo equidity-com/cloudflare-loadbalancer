@@ -23,18 +23,6 @@ const APPS = {
     primary: 'chart-storage.primary.equidity.app',
     backup: 'chart-storage.failover.equidity.app'
   },
-  'socket.eqcore.app': {
-    primary: 'eqcore-socket.primary.equidity.app',
-    backup: 'eqcore-socket.failover.equidity.app'
-  },
-  'api.eqcore.app': {
-    primary: 'eqcore-api.primary.equidity.app',
-    backup: 'eqcore-api.failover.equidity.app'
-  },
-  'admin.eqcore.app': {
-    primary: 'eqcore-admin.primary.equidity.app',
-    backup: 'eqcore-admin.failover.equidity.app'
-  },
   'socket.brokervu.com': {
     primary: 'brokervu-socket.primary.equidity.app',
     backup: 'brokervu-socket.failover.equidity.app'
@@ -57,13 +45,6 @@ const TERMINAL_CONFIG = {
   backup: 'tradyn.failover.equidity.app'
 };
 
-// White-label client config (*.eqcore.app and custom domains via SaaS)
-const WHITE_LABEL_CONFIG = {
-  domain: 'eqcore.app',
-  primary: 'eqcore-client.primary.equidity.app',
-  backup: 'eqcore-client.failover.equidity.app'
-};
-
 // White-label client config for BrokerVu (*.brokervu.com and custom domains via SaaS)
 const BROKERVU_CONFIG = {
   domain: 'brokervu.com',
@@ -77,7 +58,8 @@ const PASSTHROUGH_DOMAINS = [
   'tradyn.com',
   'www.tradyn.com',
   'brokervu.com',
-  'www.brokervu.com'
+  'www.brokervu.com',
+  'feeds.brokervu.com'
 ];
 
 const TIMEOUT = 30000; // 30 seconds - allows slow API endpoints (MetaTrader calls)
@@ -274,11 +256,6 @@ async function getConfig(host, env) {
     return TERMINAL_CONFIG;
   }
 
-  // Check if it's a white-label client domain (*.eqcore.app)
-  if (host.endsWith('.' + WHITE_LABEL_CONFIG.domain) || host === WHITE_LABEL_CONFIG.domain) {
-    return WHITE_LABEL_CONFIG;
-  }
-
   // Check if it's a BrokerVu client domain (*.brokervu.com)
   if (host.endsWith('.' + BROKERVU_CONFIG.domain)) {
     return BROKERVU_CONFIG;
@@ -291,16 +268,12 @@ async function getConfig(host, env) {
     if (appType === 'tradyn') {
       return TERMINAL_CONFIG;
     }
-    if (appType === 'client') {
-      return WHITE_LABEL_CONFIG;
-    }
     if (appType === 'brokervu') {
       return BROKERVU_CONFIG;
     }
   }
 
-  // Default: route to white-label client for custom domains
-  return WHITE_LABEL_CONFIG;
+  return null;
 }
 
 export default {
