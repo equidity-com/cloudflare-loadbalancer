@@ -57,8 +57,10 @@ const BROKERVU_CONFIG = {
 const PASSTHROUGH_DOMAINS = [
   'tradyn.com',
   'www.tradyn.com',
+  'trade-socket.tradyn.com',
   'brokervu.com',
   'www.brokervu.com',
+  'trade-socket.brokervu.com',
   'feeds.brokervu.com'
 ];
 
