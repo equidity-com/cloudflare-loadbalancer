@@ -62,7 +62,7 @@ const PASSTHROUGH_DOMAINS = [
   'www.brokervu.com',
   'trade-socket.brokervu.com',
   'feeds.brokervu.com',
-  'eodhd.brokervu.com'
+  'analytics.brokervu.com'
 ];
 
 const TIMEOUT = 30000; // 30 seconds - allows slow API endpoints (MetaTrader calls)
