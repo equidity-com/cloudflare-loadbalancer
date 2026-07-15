@@ -27,10 +27,10 @@ const APPS = {
     primary: 'brokervu-socket.primary.equidity.app',
     backup: 'brokervu-socket.failover.equidity.app'
   },
-  'api.brokervu.com': {
-    primary: 'brokervu-api.primary.equidity.app',
-    backup: 'brokervu-api.failover.equidity.app'
-  },
+  // 'api.brokervu.com': {
+  //   primary: 'brokervu-api.primary.equidity.app',
+  //   backup: 'brokervu-api.failover.equidity.app'
+  // },
   'admin.brokervu.com': {
     primary: 'brokervu-admin.primary.equidity.app',
     backup: 'brokervu-admin.failover.equidity.app'
@@ -63,7 +63,8 @@ const PASSTHROUGH_DOMAINS = [
   'trade-socket.brokervu.com',
   'feeds.brokervu.com',
   'analytics.brokervu.com',
-  'trade.brokervu.com'
+  'trade.brokervu.com',
+  'api.brokervu.com'
 ];
 
 const TIMEOUT = 30000; // 30 seconds - allows slow API endpoints (MetaTrader calls)
