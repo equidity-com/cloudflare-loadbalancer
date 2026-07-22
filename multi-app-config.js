@@ -299,8 +299,10 @@ export default {
       });
     }
 
-    // Pass through domains that have their own websites (not handled by this worker)
-    if (PASSTHROUGH_DOMAINS.includes(host)) {
+    // Pass through domains that have their own websites (not handled by this worker).
+    // Entries may be exact hosts or "*.suffix" wildcards (e.g. *.eqapi.brokervu.com).
+    if (PASSTHROUGH_DOMAINS.some((d) =>
+        d.startsWith('*.') ? host.endsWith(d.slice(1)) : d === host)) {
       return fetch(request);
     }
 
