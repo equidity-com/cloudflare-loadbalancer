@@ -70,26 +70,6 @@ const PASSTHROUGH_DOMAINS = [
   'chart-storage.brokervu.com'
 ];
 
-// Marketing sites that share a host with an app. Requests for the listed paths
-// are fetched from the static site's own origin; everything else on the host
-// (e.g. /en/login, /en/dashboard, /api/auth/*) continues to the app as before.
-// The static site serves its /_next/ chunks and fonts from its own origin
-// (assetPrefix), so only pages, public assets and its contact endpoint are listed.
-const MARKETING_SITES = {
-  'prime.equidity.com': {
-    origin: 'equidityprime.prkayy.workers.dev',
-    paths: [
-      /^\/$/,
-      /^\/contact\/?$/,
-      /^\/legal(\/|$)/,
-      /^\/assets\//,
-      /^\/api\/contact$/,
-      /^\/robots\.txt$/,
-      /^\/sitemap\.xml$/
-    ]
-  }
-};
-
 const TIMEOUT = 30000; // 30 seconds - allows slow API endpoints (MetaTrader calls)
 const HEALTH_CACHE_TTL = 30; // Remember server down status for 30 seconds
 
@@ -325,13 +305,6 @@ export default {
     if (PASSTHROUGH_DOMAINS.some((d) =>
         d.startsWith('*.') ? host.endsWith(d.slice(1)) : d === host)) {
       return fetch(request);
-    }
-
-    // Marketing site paths on a shared host (see MARKETING_SITES)
-    const marketing = MARKETING_SITES[host];
-    if (marketing && marketing.paths.some((re) => re.test(url.pathname))) {
-      const target = `https://${marketing.origin}${url.pathname}${url.search}`;
-      return fetch(new Request(target, request), { redirect: 'manual' });
     }
 
     // Get config for this app (exact match, wildcard, or KV lookup)
