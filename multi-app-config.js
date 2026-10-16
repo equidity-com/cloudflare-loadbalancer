@@ -67,7 +67,8 @@ const PASSTHROUGH_DOMAINS = [
   '*.trade.brokervu.com',
   '*.eqapi.brokervu.com',
   'api.brokervu.com',
-  'chart-storage.brokervu.com'
+  'chart-storage.brokervu.com',
+  '*notify.brokervu.com'
 ];
 
 const TIMEOUT = 30000; // 30 seconds - allows slow API endpoints (MetaTrader calls)
