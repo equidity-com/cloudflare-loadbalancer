@@ -57,6 +57,7 @@ const BROKERVU_CONFIG = {
 const PASSTHROUGH_DOMAINS = [
   'tradyn.com',
   'www.tradyn.com',
+  'admin.tradyn.com',
   'trade-socket.tradyn.com',
   'brokervu.com',
   'www.brokervu.com',
@@ -65,6 +66,7 @@ const PASSTHROUGH_DOMAINS = [
   'analytics.brokervu.com',
   'trade.brokervu.com',
   'engine.brokervu.com',
+  'risk.brokervu.com',
   'deploy.brokervu.com',
   '*.trade.brokervu.com',
   '*.eqapi.brokervu.com',
