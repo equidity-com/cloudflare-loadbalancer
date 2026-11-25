@@ -67,6 +67,7 @@ const PASSTHROUGH_DOMAINS = [
   'trade.brokervu.com',
   'engine.brokervu.com',
   'risk.brokervu.com',
+  'mt5api.brokervu.com',
   'deploy.brokervu.com',
   '*.trade.brokervu.com',
   '*.eqapi.brokervu.com',
